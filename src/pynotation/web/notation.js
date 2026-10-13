@@ -1281,11 +1281,11 @@ class Page {
     const layer = this.layer = document.createElement('canvas')
     layer.dataset.notationLayer = ''
     layer.style.cssText = 'position:absolute;left:0;top:0;margin:0;padding:0;border:0;display:block'
-    // (The line that moves is a canvas too, of one pixel: a recorder that copies a page's canvases has it in the film.)
+    // (The line that moves is a canvas too, of one pixel, stretched: a recorder that copies a page's canvases has it in the film.)
     const cursor = this.cursor = document.createElement('canvas')
     cursor.width = cursor.height = 1
     cursor.dataset.notationLayer = 'line'
-    cursor.style.cssText = 'position:absolute;left:0;top:0;width:3px;height:10px;pointer-events:none;display:none;will-change:transform'
+    cursor.style.cssText = 'position:absolute;left:0;top:0;width:3px;height:10px;pointer-events:none;display:none'
     wrap.append(layer, cursor)
     stage.mount(wrap)
     this.g = layer.getContext('2d')
@@ -1751,7 +1751,9 @@ class Page {
           const g = this.cursor.getContext('2d')
           g.clearRect(0, 0, 1, 1); g.globalAlpha = 0.6; g.fillStyle = c.cursor; g.fillRect(0, 0, 1, 1)
         }
-        line.transform = `translate(${x}px, ${y}px)`
+        // (By its left and top, not a transform: a recorder draws each canvas where its box is, and takes no notice of transforms.)
+        line.left = x + 'px'
+        line.top = y + 'px'
       }
     } else if (this.cursorAt !== null) { this.cursorAt = null; line.display = 'none' }
   }

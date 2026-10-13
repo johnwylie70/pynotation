@@ -1,8 +1,8 @@
-"""staves: music written as notes on a staff, for a Pyctures scene, that lights up as it plays.
+"""pynotation: music written as notes on a staff, for a Pyctures scene, that lights up as it plays.
 
     from pyctures import *
     from synths import *
-    from staves import *
+    from pynotation import *
 
     page = show_notes("C4 E4 G4 - C5:2", "quarter")     # a tune in the words of play_notes, as sheet music
     page.play()                                         # play it, and each note lights as it sounds
@@ -20,9 +20,9 @@
 
 THE PAGE WRITES THE MUSIC OUT AND DRAWS IT. Python never touches the page (it may
 be in a worker, or on another computer). Each function here sends ONE command that
-makes the page of music in the browser, from ``web/staves.js`` (the very file that
+makes the page of music in the browser, from ``web/notation.js`` (the very file that
 is the JavaScript library; a Pyctures that has it built in says so with
-``H_STAVES``), and Python keeps a small object that stands for it. What happens
+``H_NOTATION``), and Python keeps a small object that stands for it. What happens
 there (a note begins, a bar is tapped, a learner plays a right note) comes back
 with the next frame: ``on_note`` is called, ``page.result`` is up to date.
 
@@ -63,7 +63,7 @@ def note_name(note):
 def _library():
     """The page's half as text that can be made into a function: a page is given no file to load."""
     if _source[0] is None:
-        with open(os.path.join(_HERE, "web", "staves.js"), encoding="utf-8") as f:
+        with open(os.path.join(_HERE, "web", "notation.js"), encoding="utf-8") as f:
             _source[0] = f.read().replace("export {", "return {")
     return _source[0]
 
@@ -103,12 +103,12 @@ def _page():
     # A new run has a new `js`: what was made for the last run is gone with its page.
     if _run.js is not p.js:
         _run = _Run(p.js)
-        handle = getattr(p, "H_STAVES", None)
+        handle = getattr(p, "H_NOTATION", None)
         if handle is not None:
             _run.api = p.JsRef(handle)      # a Pyctures that has the library built in
         else:
             _run.lib = p.js.Function(_library())()
-            _run.api = _run.lib.staves(p.canvas, {"fresh": True})
+            _run.api = _run.lib.notation(p.canvas, {"fresh": True})
         _run.api.listen(_heard)
     return _run.api
 

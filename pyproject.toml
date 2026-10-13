@@ -3,7 +3,7 @@ requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "staves"
+name = "pynotation"
 version = "0.0.0"
 description = "Music written as notes on a staff, for a Pyctures scene: a tune, a tracker song or plain data is drawn as sheet music that lights up as it plays, and a learner can play along."
 readme = "README.md"
@@ -36,7 +36,7 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-staves = ["web/*.js"]
+pynotation = ["web/*.js"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

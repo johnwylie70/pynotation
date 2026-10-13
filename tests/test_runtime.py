@@ -46,13 +46,13 @@ def stopped():
 
 def test_the_page_is_given_the_library_once_and_one_command_for_each_page_of_music():
     r = start("""
-        from staves import *
+        from pynotation import *
         a = show_notes("C4 E4 G4 - C5:2", "quarter", title="Up", tempo=90, bar_numbers=False)
         b = show_notes(["C4", None, ["C4", "E4"]], at="bottom", paper="dark", colors={"now": "red"})
     """)
     assert r["error"] is None, r["error"]
     library = [c for c in r["cmds"] if c[0] == "new"]
-    assert len(library) == 1 and library[0][4] == "Function" and "return {\n  staves, showNotes" in library[0][5][0]
+    assert len(library) == 1 and library[0][4] == "Function" and "return {\n  notation, showNotes" in library[0][5][0]
     assert "export {" not in library[0][5][0] and "import.meta" not in library[0][5][0]
     made = [plain(c) for c in sent(r, "make")]
     assert made == [[1, "C4 E4 G4 - C5:2", "quarter", {"tempo": 90, "title": "Up", "barNumbers": False}],
@@ -62,7 +62,7 @@ def test_the_page_is_given_the_library_once_and_one_command_for_each_page_of_mus
 
 def test_a_sheet_is_sent_as_its_notes_and_sent_again_when_it_is_added_to():
     r = start("""
-        from staves import *
+        from pynotation import *
         sheet = make_sheet(key="G", time="3/4")
         sheet.add("G4", "quarter").add(["B4", "D5"], "half").rest("quarter")
         page = show_notes(sheet)
@@ -84,7 +84,7 @@ def test_a_song_file_is_read_by_python_and_packed_bytes_are_sent_as_text(tmp_pat
     (tmp_path / "tiny.json").write_text(json.dumps({"format": "synths-song", "patterns": [{"rows": 4, "events": [{"row": 0, "ch": 0, "note": "C-4", "ins": 1}]}]}))
     monkeypatch.chdir(tmp_path)
     r = start("""
-        from staves import *
+        from pynotation import *
         show_notes("tiny.json", channels=[0], rows_per_beat=4)
         show_notes(b"SYSG\\x01\\x00")
         try:
@@ -105,7 +105,7 @@ def test_a_song_file_is_read_by_python_and_packed_bytes_are_sent_as_text(tmp_pat
 
 def test_what_the_page_reports_reaches_the_handlers_and_the_page_object():
     r = start("""
-        from staves import *
+        from pynotation import *
         page = show_notes("C4 E4", "quarter")
         page.on_note = lambda note: print("note", note.name, note.note, note.start, note.notes)
         page.on_bar = lambda bar: print("bar", bar)
@@ -127,7 +127,7 @@ def test_what_the_page_reports_reaches_the_handlers_and_the_page_object():
 
 def test_with_no_sound_library_the_page_plays_in_silence_and_the_rest_are_single_commands():
     r = start("""
-        from staves import *
+        from pynotation import *
         page = show_notes("C4 E4", "quarter")
         page.play(start=1, tempo=90)
         page.seek(2)
@@ -176,7 +176,7 @@ sys.modules["synths"] = m
 
 def test_with_the_sound_library_the_page_says_the_words_python_plays_them_and_the_page_is_told_when():
     r = start(Synths.SOURCE + """
-from staves import *
+from pynotation import *
 import synths
 page = show_notes("C4 E4", "quarter", tempo=120, voice="bell")
 page.play()
@@ -200,7 +200,7 @@ def update(dt):
 
 def test_a_song_is_followed_by_handing_on_its_place_when_it_changes_and_a_tapped_bar_seeks_it():
     r = start(Synths.SOURCE + """
-from staves import *
+from pynotation import *
 import synths
 song = synths.Song()
 page = show_notes([{"note": "C4", "start": 0, "length": 1}], follow=song)
@@ -221,5 +221,5 @@ def update(dt):
 def test_the_copies_of_the_javascript_library_and_its_song_are_the_library_itself():
     if not JS_REPO.exists():
         pytest.skip("the JavaScript repository is not beside this one")
-    for name, copy in (("staves.js", ROOT / "src" / "staves" / "web" / "staves.js"), ("examples/songs/night_drive.json", ROOT / "examples" / "songs" / "night_drive.json"), ("LICENSE-GLYPHS", ROOT / "LICENSE-GLYPHS")):
+    for name, copy in (("notation.js", ROOT / "src" / "pynotation" / "web" / "notation.js"), ("examples/songs/night_drive.json", ROOT / "examples" / "songs" / "night_drive.json"), ("LICENSE-GLYPHS", ROOT / "LICENSE-GLYPHS")):
         assert (JS_REPO / name).read_bytes() == copy.read_bytes(), "%s differs: run python scripts/sync_js.py" % name

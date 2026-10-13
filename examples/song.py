@@ -7,7 +7,7 @@
 
 from pyctures import *
 from synths import *
-from staves import *
+from pynotation import *
 
 song = play_song("songs/night_drive.json", patches={"tune": {"preset": "bell", "echo": 0.3}})
 page = show_notes("songs/night_drive.json", channels=[3, 1], follow=song)

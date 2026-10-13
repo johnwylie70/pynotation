@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 EXAMPLES = ROOT / "examples"
 SHOTS = Path(os.environ["SHOTS"]) if os.environ.get("SHOTS") else ROOT / "tests" / "screenshots"
 # The JavaScript library, where the page's half is written, when it is beside this repository.
-JS_REPO = ROOT.parent / "staves.js"
+JS_REPO = ROOT.parent / "notation.js"
 
 # Pyctures, the sound library and the dials as installed, or else their repositories beside this one.
 PATHS = [str(ROOT / "src")]

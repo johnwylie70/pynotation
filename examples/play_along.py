@@ -8,7 +8,7 @@
 from pyctures import *
 from synths import *
 from pydials import *
-from staves import *
+from pynotation import *
 
 lead = make_synth("keys")
 page = show_notes("E4 D4 C4 D4 E4 E4 E4:2 D4 D4 D4:2 E4 G4 G4:2", "quarter", title="Mary had a little lamb", tempo=80)

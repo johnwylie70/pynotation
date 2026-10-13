@@ -14,7 +14,7 @@ playwright = pytest.importorskip("playwright.sync_api")
 SCENES = sorted(p.name for p in EXAMPLES.glob("*.py"))
 
 # The scene's pages of music, as the browser keeps them (the stage its canvas holds).
-STAGE = "document.querySelector('[data-pyctures-src] canvas')[Symbol.for('staves.stage')]"
+STAGE = "document.querySelector('[data-pyctures-src] canvas')[Symbol.for('notation.stage')]"
 PAGE = STAGE + ".pages[0]"
 
 
@@ -89,7 +89,7 @@ def test_a_tune_python_plays_is_followed_in_the_page_and_python_is_told_each_not
     run = pyctures_run(scene_file(tmp_path, """
 from pyctures import *
 from synths import *
-from staves import *
+from pynotation import *
 
 page = show_notes("C4 E4 G4 C5", "quarter", tempo=240)
 began = []
@@ -139,7 +139,7 @@ def test_a_learner_plays_along_on_a_pydials_keyboard_tied_to_the_page(browser, p
 from pyctures import *
 from synths import *
 from pydials import *
-from staves import *
+from pynotation import *
 
 lead = make_synth("keys")
 page = show_notes("C4 E4 G4", "quarter", play_along="wait", synth=lead)

@@ -1,8 +1,8 @@
 /**
- * staves.js: music written as notes on a staff, that lights up as it plays.
+ * notation.js: music written as notes on a staff, that lights up as it plays.
  *
- *   const { showNotes, makeSheet } = await use("staves.js")            (a pictures.js scene)
- *   import { showNotes, makeSheet, useSound } from "./staves.js"       (any page)
+ *   const { showNotes, makeSheet } = await use("notation.js")            (a pictures.js scene)
+ *   import { showNotes, makeSheet, useSound } from "./notation.js"       (any page)
  *
  *   showNotes("C4 E4 G4 - C5:2", "quarter")        a tune in the words of playNotes, drawn as sheet music
  *   showNotes(song, { channels: [0, 1] })          a tracker song (our JSON, or a packed MOD or XM), a staff a channel
@@ -1200,7 +1200,7 @@ function paint(g, prims, c, t) {
 // A PAGE OF MUSIC on the screen: it lays itself out for its width, follows what plays, and listens to a learner.
 
 let theSound = null
-const STAGE = Symbol.for('staves.stage')
+const STAGE = Symbol.for('notation.stage')
 const nowSeconds = () => (typeof performance !== 'undefined' ? performance.now() : Date.now()) / 1000
 
 class Page {
@@ -1241,10 +1241,10 @@ class Page {
     this.box = { x: 0, y: 0, w: 0, h: 0 }
 
     const wrap = this.wrap = document.createElement('div')
-    wrap.dataset.stavesLayer = ''
+    wrap.dataset.notationLayer = ''
     wrap.style.cssText = 'position:absolute;overflow:hidden;margin:0;padding:0;border:0;touch-action:none;user-select:none;-webkit-user-select:none'
     const layer = this.layer = document.createElement('canvas')
-    layer.dataset.stavesLayer = ''
+    layer.dataset.notationLayer = ''
     layer.style.cssText = 'position:absolute;left:0;top:0;margin:0;padding:0;border:0;display:block'
     const cursor = this.cursor = document.createElement('div')
     cursor.style.cssText = 'position:absolute;left:0;top:0;width:3px;height:10px;border-radius:2px;pointer-events:none;display:none;will-change:transform'
@@ -1294,7 +1294,7 @@ class Page {
     this.score = null
     this.plan = null
     this.all = true
-    console.error('staves.js: ' + this.error)
+    console.error('notation.js: ' + this.error)
   }
   rewrite() {
     this.score = write(this.music, this.options)
@@ -1446,7 +1446,7 @@ class Page {
     const t0 = this.clock() + 0.12
     const make = method(sound, 'makeSynth', 'make_synth')
     const main = method(sound, 'playNotes', 'play_notes')
-    if (!sound && !Page.said) { Page.said = true; console.info('staves.js: the music is followed in silence, because no sound was given to play it with. Give one: useSound({ playNotes, makeSynth, soundTime })') }
+    if (!sound && !Page.said) { Page.said = true; console.info('notation.js: the music is followed in silence, because no sound was given to play it with. Give one: useSound({ playNotes, makeSynth, soundTime })') }
     this.words(from).forEach((text, i) => {
       if (!text || !sound) return
       // Each staff plays on a synth of its own (made once, and kept), unless the page was given one; or on the sound's main synth.
@@ -2013,8 +2013,8 @@ function api(stage) {
   }
 }
 
-/** The pages of one canvas or element: `const { showNotes } = staves(canvas)`. With nothing named, the page's only canvas. */
-function staves(host, options) {
+/** The pages of one canvas or element: `const { showNotes } = notation(canvas)`. With nothing named, the page's only canvas. */
+function notation(host, options) {
   if (host && typeof host.getBoundingClientRect !== 'function') { options = host; host = null }
   host ||= onlyCanvas()
   let stage = host[STAGE]
@@ -2029,11 +2029,11 @@ function staves(host, options) {
   return stage.api
 }
 function onlyCanvas() {
-  const found = [...document.querySelectorAll('canvas')].filter((c) => c.dataset.stavesLayer === undefined && c.dataset.dialsLayer === undefined)
+  const found = [...document.querySelectorAll('canvas')].filter((c) => c.dataset.notationLayer === undefined && c.dataset.dialsLayer === undefined)
   if (found.length === 1) return found[0]
   throw new Error(found.length
-    ? 'There is more than one canvas on this page, so say which one the music is for: const { showNotes } = staves(canvas)'
-    : 'There is no canvas on this page to show music on. Name an element to fill instead: const { showNotes } = staves(document.body)')
+    ? 'There is more than one canvas on this page, so say which one the music is for: const { showNotes } = notation(canvas)'
+    : 'There is no canvas on this page to show music on. Name an element to fill instead: const { showNotes } = notation(document.body)')
 }
 
 /** A sheet to write music on a note at a time: makeSheet({ clef: "treble", key: "G", time: "3/4", tempo: 90 }). */
@@ -2048,12 +2048,12 @@ function theme(colours, which) {
 }
 
 // The same function with no canvas named: for a page (and a pictures.js scene) with one canvas.
-const showNotes = (...args) => staves().showNotes(...args)
+const showNotes = (...args) => notation().showNotes(...args)
 
 const show_notes = showNotes, make_sheet = makeSheet, use_sound = useSound
 
 export {
-  staves, showNotes, makeSheet, useSound, theme, version, show_notes, make_sheet, use_sound,
+  notation, showNotes, makeSheet, useSound, theme, version, show_notes, make_sheet, use_sound,
   // The parts that need no screen, for a program that wants the written music itself (and for the tests).
   readMusic, readTune, readSong, unpackSong, write, writeLength, layout, guessKey, chooseClef, spell, keyOf, timeOf, noteNumber, noteName, lengthBeats, glyphBox, Sheet,
 }

@@ -1,8 +1,8 @@
-The outlines of the music symbols in staves.js (the GLYPHS table: clefs, note heads, flags, rests,
+The outlines of the music symbols in notation.js (the GLYPHS table: clefs, note heads, flags, rests,
 sharps, flats, naturals, the digits of a time signature, the wavy line and the brace) are taken
 from the Leland font, https://github.com/MuseScoreFonts/Leland, and are a Modified Version of it:
 a few of its glyphs, as paths, under no font name. They remain under the licence below. The rest
-of staves.js is under the MIT licence (see LICENSE).
+of notation.js is under the MIT licence (see LICENSE).
 
 Copyright (c) 2025, MuseScore BVBA (http://www.musescore.org/),
 with Reserved Font Name "Leland".

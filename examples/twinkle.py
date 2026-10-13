@@ -8,7 +8,7 @@ import random
 
 from pyctures import *
 from synths import *
-from staves import *
+from pynotation import *
 
 sheet = make_sheet(title="Twinkle, twinkle, little star", tempo=100, key="C")
 for name in ["C4", "C4", "G4", "G4", "A4", "A4"]:

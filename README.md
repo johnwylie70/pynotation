@@ -1,10 +1,10 @@
-# staves
+# pynotation
 
 [![MIT licence](https://img.shields.io/badge/licence-MIT-green)](LICENSE)
 
 ![A song playing in a Pyctures scene with its tune and bass written out on two staves: the notes sounding now are orange and a line marks the place in the bar](docs/images/song.png)
 
-staves writes music out as notes on a staff in a [Pyctures](https://github.com/johnwylie70/pyctures) scene, and lights the notes as they play. It is for any age and any level: you give it a tune in one line and sheet music appears; you play the tune and each note lights as it sounds; you can play along on a keyboard and it tells you how you did. It is the Python sibling of [staves.js](../staves.js), and goes with [synths](https://github.com/johnwylie70/synths-py) for sound and [pydials](https://github.com/johnwylie70/pydials) for a keyboard on the screen.
+pynotation writes music out as notes on a staff in a [Pyctures](https://github.com/johnwylie70/pyctures) scene, and lights the notes as they play. It is for any age and any level: you give it a tune in one line and sheet music appears; you play the tune and each note lights as it sounds; you can play along on a keyboard and it tells you how you did. It is the Python sibling of [notation.js](../notation.js), and goes with [synths](https://github.com/johnwylie70/synths-py) for sound and [pydials](https://github.com/johnwylie70/pydials) for a keyboard on the screen.
 
 ## Start with four small scenes
 
@@ -14,7 +14,7 @@ Each one is a whole program. Run one with `pyctures run scene.py`.
 
 ```python
 from pyctures import *
-from staves import *
+from pynotation import *
 
 show_notes("E4 D4 C4 D4 E4 E4 E4:2", "quarter", title="Mary had a little lamb")
 
@@ -29,7 +29,7 @@ The notes are written the way `play_notes` takes them: a note is a letter and a 
 ```python
 from pyctures import *
 from synths import *
-from staves import *
+from pynotation import *
 
 page = show_notes("C4 C4 G4 G4 A4 A4 G4:2 F4 F4 E4 E4 D4 D4 C4:2", "quarter", tempo=100)
 page.on_note = lambda note: print("now playing", note.name)
@@ -49,7 +49,7 @@ def draw():
 ```python
 from pyctures import *
 from synths import *
-from staves import *
+from pynotation import *
 
 song = play_song("songs/night_drive.json")
 show_notes("songs/night_drive.json", channels=[3, 1], follow=song)     # the tune and the bass, a staff each
@@ -66,7 +66,7 @@ A tracker song is turned into written music: you choose which channels to show. 
 from pyctures import *
 from synths import *
 from pydials import *
-from staves import *
+from pynotation import *
 
 lead = make_synth("keys")
 page = show_notes("E4 D4 C4 D4 E4 E4 E4:2", "quarter")
@@ -94,7 +94,7 @@ The scenes in [examples/](examples) are ready to run: [twinkle.py](examples/twin
 | `show_notes("songs/tune.json", channels=[0, 1])` | a tracker song beside the scene, or the song as a dictionary, or the packed bytes of a MOD or XM |
 | `show_notes([{"note": "C4", "start": 0, "length": 1}])` | plain data, in beats |
 
-The options are those of [staves.js](../staves.js#options), spelled Python's way: `key`, `time`, `clef`, `tempo`, `title`, `at`, `x`, `y`, `width`, `height`, `zoom`, `paper`, `colours`, `scroll`, `lines`, `bar_numbers`, `follow`, `hear`, `seek`, `line`, `voice`, `synth`, and for a song `channels`, `instruments`, `drums`, `grand` and `rows_per_beat`. [How a tracker song becomes written music](../staves.js#how-a-tracker-song-becomes-written-music) is told there too.
+The options are those of [notation.js](../notation.js#options), spelled Python's way: `key`, `time`, `clef`, `tempo`, `title`, `at`, `x`, `y`, `width`, `height`, `zoom`, `paper`, `colours`, `scroll`, `lines`, `bar_numbers`, `follow`, `hear`, `seek`, `line`, `voice`, `synth`, and for a song `channels`, `instruments`, `drums`, `grand` and `rows_per_beat`. [How a tracker song becomes written music](../notation.js#how-a-tracker-song-becomes-written-music) is told there too.
 
 ## The page
 
@@ -114,7 +114,7 @@ The options are those of [staves.js](../staves.js#options), spelled Python's way
 
 ## How it is made
 
-**The page writes the music out and draws it.** Python never touches the page (it may be in a worker, or on another computer). `show_notes` sends one command, which makes the page of music in the browser from `staves.js` (the package carries the very file that is the JavaScript library), and Python keeps a small object that stands for it. What happens there comes back with the next frame.
+**The page writes the music out and draws it.** Python never touches the page (it may be in a worker, or on another computer). `show_notes` sends one command, which makes the page of music in the browser from `notation.js` (the package carries the very file that is the JavaScript library), and Python keeps a small object that stands for it. What happens there comes back with the next frame.
 
 **The sound library keeps the time.** `page.play()` asks the page for the notes as `play_notes` takes them, plays them through `synths` at a moment on the sound clock, and tells the page that moment: the page then lights the notes and moves the line by itself, every frame, with no more commands. A song is followed from `song.position`, which Python hands on as it changes, and the page moves smoothly between.
 
@@ -126,7 +126,7 @@ A keyboard from pydials tied to the page (`keyboard(page)`) plays it in the page
 python -m pytest tests
 ```
 
-`tests/test_runtime.py` is the Python half with no browser: the commands it sends and what it does with what the page reports. `tests/test_browser.py` runs scenes with `pyctures run` in a muted Chromium (it needs Playwright): every example draws its music, a tune Python plays is followed in the page and each note is told to Python in time, and a learner plays along on a pydials keyboard. The page's half is tested in [staves.js](../staves.js).
+`tests/test_runtime.py` is the Python half with no browser: the commands it sends and what it does with what the page reports. `tests/test_browser.py` runs scenes with `pyctures run` in a muted Chromium (it needs Playwright): every example draws its music, a tune Python plays is followed in the page and each note is told to Python in time, and a learner plays along on a pydials keyboard. The page's half is tested in [notation.js](../notation.js).
 
 ## Licence
 

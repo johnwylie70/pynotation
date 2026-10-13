@@ -6,4 +6,5 @@
 - `page.play()` plays the music through `synths` and the page follows it; `page.follow(song)` follows a song from `play_song`, and a tapped bar sends the song there; `on_note`, `on_bar`, `on_tap` and `on_done` are called as things happen.
 - `page.play_along("wait")` or `"time"`: the learner plays through `note_on`, or on a pydials `keyboard(page)`; `page.result` counts right, wrong and missed notes.
 - The page's half is `notation.js` itself, carried in the package; Python sends one command for each page of music.
+- `from pynotation import *` brings the sound library in by itself when it is there. A song is followed in the page, from its own sound, where the page can say the song's place. A Pyctures that has sheet music built in is used through its handle (`H_NOTATION`).
 - Three examples: a nursery tune written as code, a song with two staves following, and a play-along trainer with a keyboard.

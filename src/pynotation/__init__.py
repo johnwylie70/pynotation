@@ -48,8 +48,6 @@ __all__ = ["show_notes", "make_sheet", "theme"]
 _HERE = os.path.dirname(os.path.abspath(__file__))
 _source = [None]
 
-# How long after the time it was asked for the sound library plays a note (its `latency`): the line keeps to what is heard.
-LATENCY = 0.04
 # How far ahead of now a tune is begun, so that its first note is on time however long the frame takes.
 AHEAD = 0.15
 
@@ -362,7 +360,8 @@ class Page:
                 if synth is None:
                     synth = self._voices[i] = synths.make_synth(self._voice or "keys")
             self._tunes.append(synth.play_notes(text, words["step"] * 60.0 / bpm, at=at, hold=0.94))
-        self._call("run", {"now": synths.sound_time(), "at": at, "bpm": bpm, "from": words["from"], "latency": LATENCY})
+        # (How long after its time a note is heard is the page's to know: its player says, and a recorded one says none.)
+        self._call("run", {"now": synths.sound_time(), "at": at, "bpm": bpm, "from": words["from"]})
 
     def stop(self):
         """Stop what the page is playing, and put every note back to plain ink."""

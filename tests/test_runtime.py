@@ -191,7 +191,7 @@ def update(dt):
     # A step of half a beat at the page's own tempo of 120 is a quarter of a second, begun a little ahead of now.
     assert "('bell', 'C4:2 E4:2', 0.25, ['at', 'hold'], 0.15)" in r["out"]
     run = [plain(c[2]) for c in sent(r, "call") if c[1] == "run"]
-    assert run == [{"now": 100.0, "at": 100.15, "bpm": 120, "from": 0, "latency": 0.04}]
+    assert run == [{"now": 100.0, "at": 100.15, "bpm": 120, "from": 0}]
     # A bar tapped while it plays: the page asks for it again from there, and the tune that was playing is stopped.
     r = tick([1, "again", 4])
     assert sent(r, "words") == [[1, 4]] and "('stop', 1)" in r["out"]

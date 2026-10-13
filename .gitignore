@@ -1,0 +1,12 @@
+.venv/
+.venv*/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+tests/screenshots/
+.DS_Store
+.circuitry/
+.playwright-mcp/

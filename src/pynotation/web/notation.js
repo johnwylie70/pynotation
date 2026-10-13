@@ -302,9 +302,11 @@ function unpackSong(bytes) {
   const u16 = () => { const n = p + 2 <= b.length ? v.getUint16(p, true) : 0; p += 2; return n }
   const u32 = () => { const n = p + 4 <= b.length ? v.getUint32(p, true) : 0; p += 4; return n }
   const text = () => { const n = u16(); if (n === 0xffff) return null; const s = new TextDecoder().decode(b.subarray(p, p + n)); p += n; return s }
-  u16()
+  const version = u16()
+  if (version > 2) throw new Error(`This song is in a newer form (version ${version}) than this copy of notation.js reads (2)`)
+  const extras = []
   const flags = u16()
-  const song = { format: 'synths-song', rules: flags & 1 ? 'protracker' : 'ft2', speed: u8(), tempo: u8() }
+  const song = { format: 'synths-song', version: 2, rules: flags & 1 ? 'protracker' : 'ft2', speed: u8(), tempo: u8() }
   song.restart = u16()
   song.channels = u16()
   const counts = [u16(), u16(), u16(), u16()]
@@ -316,25 +318,34 @@ function unpackSong(bytes) {
     const pattern = { rows: u16(), events: [] }
     for (let n = u32(); n > 0 && p < b.length; n--) {
       const e = { row: u16(), ch: u8() }
-      const chord = u8()
+      const more = u8(), chord = more & 3
       const note = u8(), ins = u8(), vol = u8(), fx = u8(), param = u8()
+      // (Version 2: the number of the event's entry in the list of extras, where a glide over a time is kept.)
+      if (more & 4) { e.extra = u16(); extras.push(e) }
       if (note) e.note = note
       if (ins) e.ins = ins
       if (vol >= 0x10 && vol <= 0x50) e.vol = vol - 0x10
       else if (vol >= 0xf0) e.glide = true
       if (fx || param) e.fx = [fx, param]
-      if (chord) {
+      if (chord === 1) {
+        // An arpeggio as version 1 packed it: one voice whose pitch jumps.
         const used = u8()
         p += 7
         const offsets = Array.from({ length: 8 }, () => (u8() << 24) >> 24)
-        e.chord = used ? offsets.slice(0, used) : 'off'
+        e.arp = used ? { chord: offsets.slice(0, used) } : 'off'
+      } else if (chord === 2) {
+        // A chord or an arpeggio in full: its notes together, or one at a time.
+        const used = u8(), arp = u8(), order = u8()
+        p += 21
+        const offsets = Array.from({ length: 8 }, () => (u8() << 24) >> 24).slice(0, used)
+        if (arp) e.arp = { chord: offsets, order: order === 6 ? 'together' : 'up' }
+        else e.chord = offsets
       }
       pattern.events.push(e)
     }
     song.patterns.push(pattern)
   }
   song.instruments = []
-  const frames = []
   for (let i = 0; i < counts[2] && p < b.length; i++) {
     const ins = { name: text() || '' }
     const patch = text()
@@ -356,7 +367,23 @@ function unpackSong(bytes) {
     if (flag & 6) sample.loop = true
     p += sample.frames * (flag & 1 ? 2 : 1)
     song.samples.push(sample)
-    frames.push(sample.frames)
+  }
+  // What version 2 added comes last. Only a glide matters to what is written: a note glided to is not a new note.
+  const letters = () => String.fromCharCode(b[p] || 0, b[p + 1] || 0, b[p + 2] || 0, b[p + 3] || 0)
+  if (letters() === 'SYNT') { p += 4; for (let i = 0; i < song.instruments.length; i++) p += u32() }
+  if (letters() === 'ARPP') { p += 4; for (let n = u16(); n > 0 && p < b.length; n--) p += u8() * 4 }
+  if (letters() === 'XTRA') {
+    p += 4
+    const glides = new Set()
+    const count = u16()
+    for (let i = 1; i <= count && p < b.length; i++) {
+      const has = u8()
+      if (has & 1) { glides.add(i); p += 8 }
+      if (has & 2) p += 16
+      if (has & 4) p += 16
+      if (has & 8 && u8() === 2) { const levels = u8(); p += 15 + levels * 4 }
+    }
+    for (const e of extras) if (glides.has(e.extra)) e.glide = true
   }
   return song
 }
@@ -456,17 +483,25 @@ function readSong(song, o = {}) {
         if (fx === 'D') next = (param >> 4) * 10 + (param & 15)
         if (e.ins) ch.ins = e.ins
         const note = trackerNote(e.note)
-        const glide = e.glide || fx === '3' || fx === '5' || (typeof e.vol === 'string' && /^m/i.test(e.vol))
-        const chord = e.chord === undefined || e.chord === 'off' ? null : typeof e.chord === 'string' ? (chordKind(e.chord) || chordOffsets(e.chord)) : e.chord.map((c, i) => (typeof c === 'string' ? noteNumber(c) - (typeof note === 'number' ? note : 0) : c))
+        // A note that is glided to is not struck: the note before slides to it, and nothing new is written.
+        const glide = (e.glide !== undefined && e.glide !== false) || fx === '3' || fx === '5' || (typeof e.vol === 'string' && /^m/i.test(e.vol))
+        // CHORDS AND ARPEGGIOS. In a version 2 song `chord` is notes together and `arp` the notes one at a time; in a
+        // version 1 song (and beside its three old keys) `chord` was always the fast arpeggio. Both are written as the chord,
+        // an arpeggio with a wavy line beside it.
+        const old = e.chord !== undefined && (!(song.version >= 2) || e.chordSpeed !== undefined || e.chordHz !== undefined || e.chordOrder !== undefined)
+        const arp = e.arp && typeof e.arp === 'object' ? e.arp : null
+        const said = arp ? arp.chord : e.chord
+        const chord = said === undefined || said === 'off' || said === null ? null : typeof said === 'string' ? (chordKind(said) || chordOffsets(said)) : said.map((c) => (typeof c === 'string' ? noteNumber(c) - (typeof note === 'number' ? note : 0) : c))
+        const broken = !!chord && (arp ? arp.order !== 'together' : old)
         if (note === 'off' || e.vol === 0 || (fx === 'C' && param === 0)) close(ch, total)
-        else if ((typeof note === 'number' && !glide) || (chord && (note === null ? ch.open || typeof e.chord === 'string' : true))) {
+        else if ((typeof note === 'number' && !glide) || (chord && (note === null ? ch.open || typeof said === 'string' : true))) {
           // A chord named with its root ("G7") and no note is on that root; a kind alone ("min") is on the note that is sounding.
-          const named = typeof e.chord === 'string' && !chordKind(e.chord) ? chordRoot(e.chord) : null
+          const named = typeof said === 'string' && !chordKind(said) ? chordRoot(said) : null
           const root = typeof note === 'number' ? note : named !== null ? named : ch.open ? ch.open.root : null
           if (root === null) continue
           close(ch, total)
           const pitches = chord ? [...new Set(chord.map((c) => root + c))].sort((a, b) => a - b) : [root]
-          ch.open = { row: total, root, notes: pitches, arp: !!chord && pitches.length > 1, ins: ch.ins, rings: Math.ceil(rings(ch.ins, root)) }
+          ch.open = { row: total, root, notes: pitches, arp: broken && pitches.length > 1, ins: ch.ins, rings: Math.ceil(rings(ch.ins, root)) }
           if (fx === 'E' && (param >> 4) === 0xc) ch.open.rings = Math.min(ch.open.rings, 1)
         }
       }
@@ -1246,8 +1281,11 @@ class Page {
     const layer = this.layer = document.createElement('canvas')
     layer.dataset.notationLayer = ''
     layer.style.cssText = 'position:absolute;left:0;top:0;margin:0;padding:0;border:0;display:block'
-    const cursor = this.cursor = document.createElement('div')
-    cursor.style.cssText = 'position:absolute;left:0;top:0;width:3px;height:10px;border-radius:2px;pointer-events:none;display:none;will-change:transform'
+    // (The line that moves is a canvas too, of one pixel: a recorder that copies a page's canvases has it in the film.)
+    const cursor = this.cursor = document.createElement('canvas')
+    cursor.width = cursor.height = 1
+    cursor.dataset.notationLayer = 'line'
+    cursor.style.cssText = 'position:absolute;left:0;top:0;width:3px;height:10px;pointer-events:none;display:none;will-change:transform'
     wrap.append(layer, cursor)
     stage.mount(wrap)
     this.g = layer.getContext('2d')
@@ -1423,6 +1461,18 @@ class Page {
   }
   unfollow() { this.source = null; this.following = null; return this }
 
+  /**
+   * Is the sound on? A browser keeps a page silent until it has been touched, and the sound library loads its engine
+   * first: its clock runs all the while, so the clock alone cannot say. A sound says with its player's `state`
+   * ("loading" and "waiting" are not yet), or a `state` of its own; a sound that says nothing is taken to be on.
+   */
+  soundOn() {
+    const sound = this.sound
+    if (!sound) return true
+    const player = sound.player || (method(sound, 'soundPlayer', 'sound_player') || (() => null))()
+    const state = player && player.state !== undefined ? player.state : typeof sound.state === 'function' ? sound.state() : sound.state
+    return state !== 'loading' && state !== 'waiting'
+  }
   /** The time on the sound's clock, or the page's own when no sound was given. */
   clock() { const ask = method(this.sound, 'soundTime', 'sound_time'); return ask ? ask() : nowSeconds() }
   /**
@@ -1439,6 +1489,8 @@ class Page {
     this.stop()
     const score = this.score
     if (!score) { this.ready && this.ready.then(() => this.score && this.play(o)); return this }
+    // Begun when the sound is on: until then the line would move through notes nobody could hear.
+    if (!this.soundOn()) { this.playing = true; this.pending = () => this.play(o); return this }
     const sound = this.sound
     const bpm = o.tempo || this.options.tempo || score.tempo
     const from = Math.round(clamp(o.from || 0, 0, score.length / TICKS) * TICKS)
@@ -1500,13 +1552,28 @@ class Page {
     const bpm = o.bpm || score.tempo, from = (o.from || 0) * TICKS, late = o.latency ?? 0.04
     this.playing = true
     this.source = () => {
-      const t = ((theirs ? theirs() : nowSeconds() - this.stage.offset) - late - o.at) * bpm / 60 + from / TICKS
+      // (The host's clock as the page's sound reckons it, when it does; else as this page has, from what the host has sent.)
+      const now = theirs ? theirs() : null
+      const t = ((typeof now === 'number' ? now : nowSeconds() - this.stage.offset) - late - o.at) * bpm / 60 + from / TICKS
       if (t * TICKS >= score.length) { this.finish(); return null }
       return t * TICKS < from ? null : t
     }
   }
+  /**
+   * For a host whose song plays in this page: follow the page's own sound, where it can say the song's place
+   * (`songPosition()`), and tell the host so ("direct"), which then need hand nothing on. A tapped bar is told to the host.
+   */
+  followSound() {
+    const ask = method(this.sound, 'songPosition', 'song_position')
+    if (!ask) return
+    this.feeding = true
+    this.direct = true
+    this.follow({ get position() { return ask() } })
+    this.stage.tell(this.id, 'direct', 1)
+  }
   /** For a host that reads the song's place itself: where the song is now, as song.position gives it. */
   feed(position) {
+    if (this.direct) return
     this.fed = position
     if (!this.feeding) { this.feeding = true; this.follow({ get position() { return this.page.fed }, page: this }) }
   }
@@ -1520,6 +1587,7 @@ class Page {
   /** Stop what the page is playing, and put the line back at the start. */
   stop() {
     for (const tune of this.tunes.splice(0)) { const stop = method(tune, 'stop'); if (stop) stop() }
+    this.pending = null
     if (this.playing) { this.playing = false; this.source = null }
     this.rest()
     return this
@@ -1580,6 +1648,7 @@ class Page {
   // --- a frame: read where the music is, draw what changed, move the line
   frame(now) {
     this.fit()
+    if (this.pending && this.soundOn()) { const begin = this.pending; this.pending = null; begin() }
     const g = this.g, k = this.ratio, box = this.box, c = this.colours
     if (!this.plan) {
       if (this.all) { this.all = false; this.blank(g, c); if (this.error) this.say(g, c, this.error) }
@@ -1658,8 +1727,11 @@ class Page {
         this.cursorAt = key
         line.display = y + h < 0 || y > box.h ? 'none' : 'block'
         line.height = h + 'px'
-        line.background = c.cursor
-        line.opacity = '0.6'
+        if (this.cursorInk !== c.cursor) {
+          this.cursorInk = c.cursor
+          const g = this.cursor.getContext('2d')
+          g.clearRect(0, 0, 1, 1); g.globalAlpha = 0.6; g.fillStyle = c.cursor; g.fillRect(0, 0, 1, 1)
+        }
         line.transform = `translate(${x}px, ${y}px)`
       }
     } else if (this.cursorAt !== null) { this.cursorAt = null; line.display = 'none' }
@@ -1792,6 +1864,8 @@ class Page {
     this.result = { right: 0, wrong: 0, missed: 0, total: 0, timing: null, percent: 0, done: false }
     if (o.synth) this.options.synth = o.synth
     if (!this.score) return this
+    // (Keeping time begins when the sound is on, as playing does.)
+    if (mode === 'time' && !this.soundOn()) { this.pending = () => this.playAlong(o); return this }
     const along = this.along, score = this.score
     const staffs = o.staff === undefined ? null : [].concat(o.staff)
     // What is to be played, a moment at a time: the notes that begin together, on the staves chosen.
@@ -1961,7 +2035,16 @@ class Stage {
     }
     this.raf = requestAnimationFrame(tick)
   }
-  mount(wrap) { if (this.canvas) (this.last || this.host).after(wrap); else this.host.append(wrap); this.last = wrap }
+  /** Over the scene's canvas and whatever other libraries have laid on it (effects, a change of scene), and under the on-screen controls. */
+  mount(wrap) {
+    if (!this.canvas) { this.host.append(wrap); return }
+    let after = this.host
+    for (let next = after.nextElementSibling; next && next.dataset && next.dataset.dialsLayer === undefined; next = next.nextElementSibling) {
+      if (next.tagName !== 'CANVAS' && next.dataset.notationLayer === undefined) break
+      after = next
+    }
+    after.after(wrap)
+  }
   size() { return [this.host.clientWidth, this.host.clientHeight] }
   origin() { return this.canvas ? [this.host.offsetLeft, this.host.offsetTop] : [0, 0] }
   tell(id, what, more) { if (this.listener) this.told.push(id, what, more) }
@@ -2001,10 +2084,16 @@ function api(stage) {
     /** The page itself, by its number: what a keyboard in the page is tied to. */
     page: (id) => stage.pages.find((p) => p.id === id) || null,
     /** The words a page would play, for a host that does the playing: told back as "words". */
-    words: (id, from) => { const page = stage.pages.find((p) => p.id === id); if (page && page.score) stage.tell(id, 'words', { staves: page.words(Math.round((from || 0) * TICKS)), step: page.score.grid / TICKS, tempo: page.score.tempo, from: from || 0 }) },
+    words: (id, from) => {
+      const page = stage.pages.find((p) => p.id === id)
+      if (!page) return
+      // (Told when the music is written and the sound is on: the host plays the moment it hears.)
+      const say = () => { if (page.score) stage.tell(id, 'words', { staves: page.words(Math.round((from || 0) * TICKS)), step: page.score.grid / TICKS, tempo: page.score.tempo, from: from || 0 }) }
+      if (page.score && page.soundOn()) say(); else page.pending = () => (page.score ? say() : (page.pending = say))
+    },
     /**
      * What happened is handed over once a frame: { t: JSON text of a flat list of page id, what, details… }. `what` is "note",
-     * "bar", "tap", "right", "wrong", "result", "done", "words", "seek" or "again".
+     * "bar", "tap", "right", "wrong", "result", "done", "words", "seek", "again" or "direct".
      */
     listen: (fn) => { stage.listener = fn },
     /** A host that must look at something every frame is called every frame instead, once it has answered the last call with ack(). */
@@ -2029,7 +2118,7 @@ function notation(host, options) {
   return stage.api
 }
 function onlyCanvas() {
-  const found = [...document.querySelectorAll('canvas')].filter((c) => c.dataset.notationLayer === undefined && c.dataset.dialsLayer === undefined)
+  const found = [...document.querySelectorAll('canvas')].filter((c) => !Object.keys(c.dataset).some((key) => /Layer$/.test(key)))
   if (found.length === 1) return found[0]
   throw new Error(found.length
     ? 'There is more than one canvas on this page, so say which one the music is for: const { showNotes } = notation(canvas)'
@@ -2051,9 +2140,11 @@ function theme(colours, which) {
 const showNotes = (...args) => notation().showNotes(...args)
 
 const show_notes = showNotes, make_sheet = makeSheet, use_sound = useSound
+/** The functions a scene is given by a library that has this one built in (pictures.js), in the spelling of JavaScript. */
+const sceneNames = ['showNotes', 'makeSheet']
 
 export {
-  notation, showNotes, makeSheet, useSound, theme, version, show_notes, make_sheet, use_sound,
+  notation, showNotes, makeSheet, useSound, theme, version, show_notes, make_sheet, use_sound, sceneNames,
   // The parts that need no screen, for a program that wants the written music itself (and for the tests).
   readMusic, readTune, readSong, unpackSong, write, writeLength, layout, guessKey, chooseClef, spell, keyOf, timeOf, noteNumber, noteName, lengthBeats, glyphBox, Sheet,
 }

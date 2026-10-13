@@ -127,6 +127,8 @@ def test_what_the_page_reports_reaches_the_handlers_and_the_page_object():
 
 def test_with_no_sound_library_the_page_plays_in_silence_and_the_rest_are_single_commands():
     r = start("""
+        import sys
+        sys.modules["synths"] = None        # there is no sound library to be had
         from pynotation import *
         page = show_notes("C4 E4", "quarter")
         page.play(start=1, tempo=90)
@@ -216,6 +218,19 @@ def update(dt):
     assert [c for c in sent(r, "call") if c[1] == "feed"] == [] and len(sent(r, "ack")) == 1     # it has not moved: nothing is sent
     r = tick([1, "seek", {"order": 2, "row": 16}])
     assert "('seek', 2, 16)" in r["out"]
+
+
+def test_a_page_whose_own_sound_says_where_the_song_is_follows_it_there_and_python_hands_nothing_on():
+    r = start(Synths.SOURCE + """
+from pynotation import *
+import synths
+song = synths.Song()
+page = show_notes([{"note": "C4", "start": 0, "length": 1}], follow=song)
+""")
+    assert r["error"] is None, r["error"]
+    assert [c[1] for c in sent(r, "call")] == ["followSound"]
+    r = tick([1, "direct", 1], beat=1)
+    assert [c for c in sent(r, "call") if c[1] == "feed"] == [] and len(sent(r, "ack")) == 1
 
 
 def test_the_copies_of_the_javascript_library_and_its_song_are_the_library_itself():

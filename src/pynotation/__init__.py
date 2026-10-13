@@ -27,10 +27,11 @@ there (a note begins, a bar is tapped, a learner plays a right note) comes back
 with the next frame: ``on_note`` is called, ``page.result`` is up to date.
 
 WHO KEEPS TIME. The sound library does. ``page.play()`` asks the page for the notes
-as ``play_notes`` takes them, plays them through ``synths`` at a moment on the sound
-clock, and tells the page that moment: the page then moves by itself, every frame,
-with no more commands. A song is followed from ``song.position``, which Python hands
-on as it changes.
+as ``play_notes`` takes them (it answers when the sound is on, not before), plays them
+through ``synths`` at a moment on the sound clock, and tells the page that moment: the
+page then moves by itself, every frame, with no more commands. A song is followed in
+the page, from the place its own sound says the song is at; where a page cannot say,
+Python hands ``song.position`` on as it changes.
 
 MIT licence. The outlines of the music symbols are from the Leland font, under the
 SIL Open Font Licence 1.1 (see LICENSE-GLYPHS).
@@ -91,9 +92,18 @@ def _pyctures():
     return module
 
 
+_no_synths = [False]
+
+
 def _synths():
-    """The sound library, if the scene uses it."""
-    return sys.modules.get("synths")
+    """The sound library, if it is there: music is played through it, and it keeps the time."""
+    module = sys.modules.get("synths")
+    if module is None and not _no_synths[0]:
+        try:
+            import synths as module
+        except ImportError:
+            _no_synths[0] = True     # not looked for again: the page then plays in silence
+    return module
 
 
 def _page():
@@ -229,6 +239,7 @@ class Page:
         self._what = what
         self._step = step
         self._song = None
+        self._direct = False
         self._beats = None
         self._place = None
         self._wants = None
@@ -297,6 +308,8 @@ class Page:
                 self.on_done(self.result if more else self)
         elif what == "words":
             self._play_words(more)
+        elif what == "direct":
+            self._direct = True      # the page reads the song's place from its own sound: nothing need be handed on
         elif what == "seek":
             if self._song is not None:
                 self._song.seek(more["order"], more["row"])
@@ -305,7 +318,7 @@ class Page:
 
     def _frame(self):
         """Every frame while something is followed: the page is told where it has got to, when that has changed."""
-        if self._song is not None:
+        if self._song is not None and not self._direct:
             place = dict(self._song.position)
             if place != self._place:
                 self._place = place
@@ -365,8 +378,10 @@ class Page:
     def follow(self, what):
         """Follow something that plays: a song from play_song, or a function that gives how many beats have gone by."""
         self._song = self._beats = self._place = None
+        self._direct = False
         if hasattr(what, "position") and hasattr(what, "seek"):
             self._song = what
+            self._call("followSound")
         elif callable(what):
             self._beats = what
         else:

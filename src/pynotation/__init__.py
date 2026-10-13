@@ -118,6 +118,12 @@ def _page():
             _run.lib = p.js.Function(_library())()
             _run.api = _run.lib.notation(p.canvas, {"fresh": True})
         _run.api.listen(_heard)
+        # A scene that a recorder moves a frame at a time (Pyctures' S.vt) has its pages drawn as the last thing of
+        # each frame, so the note lit in a frame of the film is the note sounding at that frame's own time.
+        ending = getattr(getattr(p, "S", None), "ending", None)
+        if ending is not None:
+            run = _run
+            ending.append(lambda: run.api.frame() if run.items and getattr(p.S, "vt", None) is not None else None)
     return _run.api
 
 

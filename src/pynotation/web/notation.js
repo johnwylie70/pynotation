@@ -2041,22 +2041,26 @@ class Stage {
     const tick = (now) => {
       if (!host.isConnected) return this.close()
       this.raf = requestAnimationFrame(tick)
-      for (const page of [...this.pages]) {
-        if (!page.wrap.isConnected) { page.remove(); continue }
-        try { page.frame(now) } catch (e) { page.fail(e); page.all = true }
-      }
-      const beat = this.beats && this.armed
-      if (this.listener && (this.told.length || beat)) {
-        const told = this.told
-        this.told = []
-        if (beat) this.armed = false
-        // (As JSON text: a host that carries this elsewhere need know nothing of its shape.)
-        this.listener({ t: told.length ? JSON.stringify(told) : '', b: beat ? 1 : 0 })
-      }
+      this.frame(now)
     }
     this.raf = requestAnimationFrame(tick)
   }
   /** Over the scene's canvas and whatever other libraries have laid on it (effects, a change of scene), and under the on-screen controls. */
+  /** One frame of every page, and what happened told to whoever listens. The screen's refreshes ask for it; so may a host. */
+  frame(now) {
+    for (const page of [...this.pages]) {
+      if (!page.wrap.isConnected) { page.remove(); continue }
+      try { page.frame(now) } catch (e) { page.fail(e); page.all = true }
+    }
+    const beat = this.beats && this.armed
+    if (this.listener && (this.told.length || beat)) {
+      const told = this.told
+      this.told = []
+      if (beat) this.armed = false
+      // (As JSON text: a host that carries this elsewhere need know nothing of its shape.)
+      this.listener({ t: told.length ? JSON.stringify(told) : '', b: beat ? 1 : 0 })
+    }
+  }
   mount(wrap) {
     if (!this.canvas) { this.host.append(wrap); return }
     let after = this.host
@@ -2121,6 +2125,11 @@ function api(stage) {
     listen: (fn) => { stage.listener = fn },
     /** A host that must look at something every frame is called every frame instead, once it has answered the last call with ack(). */
     beat: (on) => { stage.beats = on !== false; stage.armed = true },
+    /**
+     * Draw every page now, as it stands at this moment of the sound's clock. A host whose scene a recorder moves a
+     * frame at a time asks this as the last thing of each frame, so the picture copied is that frame's own.
+     */
+    frame: () => stage.frame(performance.now()),
     ack: () => { stage.armed = true },
   }
 }

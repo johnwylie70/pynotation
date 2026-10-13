@@ -1572,15 +1572,23 @@ class Page {
   }
   /**
    * For a host whose song plays in this page: follow the page's own sound, where it can say the song's place
-   * (`songPosition()`), and tell the host so ("direct"), which then need hand nothing on. A tapped bar is told to the host.
+   * (`songPosition()`, its own or its player's), and tell the host so ("direct"), which then need hand nothing on.
+   * A tapped bar is told to the host.
    */
   followSound() {
-    const ask = method(this.sound, 'songPosition', 'song_position')
-    if (!ask) return
+    const sound = this.sound, page = this
+    const ask = () => { const from = method(sound, 'songPosition', 'song_position') || method(sound && sound.player, 'songPosition'); return from ? from() : null }
+    if (!sound || this.direct !== undefined) return
+    this.direct = false
     this.feeding = true
-    this.direct = true
-    this.follow({ get position() { return ask() } })
-    this.stage.tell(this.id, 'direct', 1)
+    this.follow({
+      get position() {
+        const place = ask()
+        // (Told once the sound has really said where the song is: until then the host goes on handing its place on.)
+        if (place && place.state && place.state !== 'none' && !page.direct) { page.direct = true; page.stage.tell(page.id, 'direct', 1) }
+        return page.direct ? place : page.fed
+      },
+    })
   }
   /** For a host that reads the song's place itself: where the song is now, as song.position gives it. */
   feed(position) {
@@ -2084,6 +2092,8 @@ function api(stage) {
     /** Is a page of music at this point of the scene? A game asks before it treats a click as its own. */
     over: (x, y) => { if (typeof x === 'object') ({ x, y } = x); return stage.pages.some((p) => x >= p.box.x && x <= p.box.x + p.box.w && y >= p.box.y && y <= p.box.y + p.box.h) },
     clear: () => { for (const page of [...stage.pages]) page.remove() },
+    /** Take every page away and stop: what a host does when its scene ends. */
+    close: () => stage.close(),
     get all() { return [...stage.pages] },
     stage,
 

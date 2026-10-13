@@ -1311,6 +1311,9 @@ class Page {
         return
       }
       this.music = readMusic(what, this.step, o)
+      // A song is kept as the sound library takes one, so that play() can play the very song that is shown.
+      this.raw = !this.music.song ? null : isBytes(what) ? what : what && typeof what.packed === 'string' ? Uint8Array.from(atob(what.packed), (c) => c.charCodeAt(0))
+        : new TextEncoder().encode(typeof what === 'string' ? what : JSON.stringify(what))
       this.rewrite()
       this.ready = Promise.resolve(this)
     } catch (e) { this.wrap.remove(); throw e }
@@ -1320,7 +1323,7 @@ class Page {
     const resolve = this.options.resolve || this.stage.resolve
     const answer = await fetch(resolve ? resolve(file) : new URL(file, document.baseURI)).catch(() => null)
     if (!answer || !answer.ok) throw new Error(`The song "${file}" could not be loaded (${answer ? answer.status : 'no answer'}), so there is nothing to show`)
-    const bytes = new Uint8Array(await answer.arrayBuffer())
+    const bytes = this.raw = new Uint8Array(await answer.arrayBuffer())
     if (bytes[bytes.findIndex((b) => b > 32)] === 123) return readSong(JSON.parse(new TextDecoder().decode(bytes)), this.options)
     if (String.fromCharCode(...bytes.subarray(0, 4)) === 'SYSG') return readSong(unpackSong(bytes), this.options)
     const pack = method(this.sound, 'packSong', 'pack_song')
@@ -1426,8 +1429,8 @@ class Page {
   /** How far through the music it is, in beats. Setting it moves the line there. */
   get beat() { return Math.max(0, this.tick) / TICKS }
   set beat(b) { this.source = null; this.tick = Math.max(0, b) * TICKS }
-  /** The bar it is in, counting from 1. */
-  get bar() { return this.score ? Math.floor(Math.max(0, this.tick) / this.score.bar) + 1 : 1 }
+  /** The bar it is in, counting from 1; 0 until the music has begun. */
+  get bar() { return this.score && this.tick >= 0 ? Math.floor(this.tick / this.score.bar) + 1 : 0 }
   /** The notes sounding now, as numbers. */
   get sounding() { return this.active.flatMap((e) => e.sounds) }
   /**
@@ -1494,12 +1497,34 @@ class Page {
   /**
    * Play the music through the sound that was given (useSound), and follow it: page.play(), page.play({ from: 8 })
    * to start eight beats in, { tempo: 90 } to play it slower, { repeat: true }. With no sound, the line moves in silence.
+   * A page that shows a song plays the song itself.
    */
   play(o = {}) {
     if (typeof o === 'number') o = { from: o }
     this.stop()
     const score = this.score
     if (!score) { this.ready && this.ready.then(() => this.score && this.play(o)); return this }
+    // A SONG is played by the sound library as the song it is (its own instruments, drums and all), and followed
+    // from its own place: it goes round and round unless { repeat: false }. `patches` says what its synths are.
+    const playSong = score.song && this.raw ? method(this.sound, 'playSong', 'play_song') : null
+    if (playSong) {
+      const more = { repeat: (o.repeat ?? this.options.repeat) !== false }
+      if (o.patches || this.options.patches) more.patches = o.patches || this.options.patches
+      const song = this.song = playSong(this.raw, more)
+      if (o.from > 0) { const place = score.song.place(o.from); song.seek(place.order, place.row) }
+      this.playing = true
+      // (Until the sound has taken this song up, its place may still be where the song before it had got to: nothing
+      // is followed until the song has been seen not yet playing, or at its beginning.)
+      let begun = false
+      return this.follow({
+        get position() {
+          const place = song.position
+          if (!begun && place && (place.state !== 'playing' || (place.order === 0 && place.row < 2 && !(o.from > 0)))) begun = true
+          return begun ? place : null
+        },
+        seek: (order, row) => song.seek(order, row),
+      })
+    }
     // Begun when the sound is on: until then the line would move through notes nobody could hear.
     if (!this.soundOn()) { this.playing = true; this.pending = () => this.play(o); return this }
     const sound = this.sound
@@ -1606,6 +1631,7 @@ class Page {
   /** Stop what the page is playing, and put the line back at the start. */
   stop() {
     for (const tune of this.tunes.splice(0)) { const stop = method(tune, 'stop'); if (stop) stop() }
+    if (this.song) { const song = this.song; this.song = null; this.playing = false; song.stop(); this.unfollow() }
     this.pending = null
     if (this.playing) { this.playing = false; this.source = null }
     this.rest()

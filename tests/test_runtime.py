@@ -8,6 +8,9 @@ from conftest import JS_REPO, ROOT
 
 import pyctures
 
+# A Pyctures that has sheet music built in keeps it at this handle; one that has not is sent the library as text.
+BUILT_IN = getattr(pyctures, "H_NOTATION", None)
+
 INFO = json.dumps({"width": 400, "height": 300, "pixel_ratio": 2})
 
 
@@ -52,8 +55,12 @@ def test_the_page_is_given_the_library_once_and_one_command_for_each_page_of_mus
     """)
     assert r["error"] is None, r["error"]
     library = [c for c in r["cmds"] if c[0] == "new"]
-    assert len(library) == 1 and library[0][4] == "Function" and "return {\n  notation, showNotes" in library[0][5][0]
-    assert "export {" not in library[0][5][0] and "import.meta" not in library[0][5][0]
+    if BUILT_IN:
+        # A Pyctures that has sheet music built in: nothing is sent but the commands, to its handle.
+        assert library == [] and all(c[3] == BUILT_IN for c in r["cmds"] if c[0] == "call")
+    else:
+        assert len(library) == 1 and library[0][4] == "Function" and "return {\n  notation, showNotes" in library[0][5][0]
+        assert "export {" not in library[0][5][0] and "import.meta" not in library[0][5][0]
     made = [plain(c) for c in sent(r, "make")]
     assert made == [[1, "C4 E4 G4 - C5:2", "quarter", {"tempo": 90, "title": "Up", "barNumbers": False}],
                     [2, ["C4", None, ["C4", "E4"]], None, {"at": "bottom", "paper": "dark", "colours": {"now": "red"}}]]
@@ -166,6 +173,7 @@ class Synth:
 class Song:
     position = {"state": "playing", "order": 0, "row": 0, "tick": 0, "speed": 6, "tempo": 125}
     def seek(self, order, row=0): played.append(("seek", order, row))
+    def stop(self): played.append(("song stopped",))
 clock = [100.0]
 m = types.ModuleType("synths")
 m.played, m.clock, m.Song = played, clock, Song
@@ -218,6 +226,26 @@ def update(dt):
     assert [c for c in sent(r, "call") if c[1] == "feed"] == [] and len(sent(r, "ack")) == 1     # it has not moved: nothing is sent
     r = tick([1, "seek", {"order": 2, "row": 16}])
     assert "('seek', 2, 16)" in r["out"]
+
+
+def test_a_page_that_shows_a_song_plays_the_song_itself_and_follows_it(tmp_path, monkeypatch):
+    (tmp_path / "tiny.json").write_text(json.dumps({"format": "synths-song", "patterns": [{"rows": 4, "events": [{"row": 0, "ch": 0, "note": "C-4", "ins": 1}]}]}))
+    monkeypatch.chdir(tmp_path)
+    r = start(Synths.SOURCE + """
+from pynotation import *
+import synths
+synths.play_song = lambda file, **more: (synths.played.append(("song", file, sorted(more.items()))), synths.Song())[1]
+page = show_notes("tiny.json", patches={"lead": "bell"})
+page.play()
+print(synths.played, page.playing)
+page.stop()
+print(page.playing)
+""")
+    assert r["error"] is None, r["error"]
+    assert "[('song', 'tiny.json', [('patches', {'lead': 'bell'}), ('repeat', True)])] True" in r["out"] and r["out"].strip().endswith("False")
+    calls = [c[1] for c in sent(r, "call")]
+    assert calls == ["stop", "followSound", "unfollow", "stop"]
+    assert "patches" not in json.dumps(sent(r, "make"))
 
 
 def test_a_page_whose_own_sound_says_where_the_song_is_follows_it_there_and_python_hands_nothing_on():

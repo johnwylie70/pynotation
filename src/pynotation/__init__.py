@@ -210,6 +210,15 @@ def _music(what):
     return what
 
 
+def _is_song(what):
+    """Is what a page shows a tracker song: a song file's name, the song as a dictionary, or its bytes?"""
+    if isinstance(what, (bytes, bytearray)):
+        return True
+    if isinstance(what, str):
+        return what.strip().lower().endswith((".json", ".song", ".mod", ".xm"))
+    return isinstance(what, dict) and isinstance(what.get("patterns"), list)
+
+
 def _in_page(thing):
     """The thing as an object in the page, when that is where it lives (a synth does); else None."""
     if thing is None:
@@ -236,6 +245,9 @@ class Page:
         self.on_wrong = options.pop("on_wrong", None)
         follow = options.pop("follow", None)
         along = options.pop("play_along", None)
+        self._patches = options.pop("patches", None)
+        self._repeat = options.pop("repeat", None)
+        self._played = None      # the song this page is playing, when what it shows is a song
         self._voice = options.get("voice")
         self._synth = options.pop("synth", None)
         self._tempo = options.get("tempo")
@@ -251,7 +263,7 @@ class Page:
         self._voices = {}
         self.playing = False
         self.beat = 0.0
-        self.bar = 1
+        self.bar = 0         # the bar the music is in, counting from 1; 0 until it has begun
         self.sounding = []
         self.result = Result(right=0, wrong=0, missed=0, total=0, percent=0, timing=None, done=False)
         if isinstance(what, Sheet):
@@ -337,11 +349,22 @@ class Page:
         self._call("show", _music(self._what), self._step)
 
     # --- playing and following
-    def play(self, start=0, tempo=None, repeat=False):
+    def play(self, start=0, tempo=None, repeat=None):
         """Play the music through the sound library and follow it: page.play(), page.play(start=8) to begin eight
-        beats in, tempo=90 to play it slower. With no sound library in the scene, the line moves in silence."""
+        beats in, tempo=90 to play it slower. With no sound library in the scene, the line moves in silence.
+        A page that shows a song plays the song itself, round and round unless repeat=False."""
         self.stop()
         self.playing = True
+        synths = _synths()
+        if synths is not None and _is_song(self._what):
+            # A song is played by the sound library as the song it is (its own instruments, drums and all), and followed.
+            song = self._what if isinstance(self._what, (str, bytes, bytearray)) else json.dumps(self._what).encode("utf-8")
+            more = {"repeat": bool(repeat) if repeat is not None else self._repeat is not False}
+            if self._patches:
+                more["patches"] = self._patches
+            self._played = synths.play_song(song.strip() if isinstance(song, str) else song, **more)
+            self.follow(self._played)
+            return self
         if _synths() is None:
             self._call("play", {"from": start, "tempo": tempo, "repeat": bool(repeat)})
             return self
@@ -374,9 +397,15 @@ class Page:
         for tune in self._tunes:
             tune.stop()
         del self._tunes[:]
+        if self._played is not None:
+            self._played.stop()
+            self._played = None
+            self._song = None
+            self._call("unfollow")
         self._wants = None
         self.playing = False
         self.sounding = []
+        self.bar = 0
         self._call("stop")
         return self
 
@@ -467,7 +496,7 @@ class Page:
 def show_notes(music, step=None, *, key=None, time=None, clef=None, tempo=None, title=None, at=None, x=None, y=None,
                width=None, height=None, zoom=None, paper=None, colours=None, colors=None, scroll=None, lines=None,
                bar_numbers=None, follow=None, hear=None, seek=None, line=None, voice=None, synth=None, channels=None,
-               instruments=None, drums=None, grand=None, rows_per_beat=None, play_along=None, on_note=None,
+               instruments=None, drums=None, grand=None, rows_per_beat=None, patches=None, repeat=None, play_along=None, on_note=None,
                on_bar=None, on_tap=None, on_done=None, on_right=None, on_wrong=None):
     """Show music as notes on a staff, and get its page back.
 
@@ -481,7 +510,7 @@ def show_notes(music, step=None, *, key=None, time=None, clef=None, tempo=None, 
                    zoom=zoom, paper=paper, colours=colours if colours is not None else colors, scroll=scroll, lines=lines,
                    barNumbers=bar_numbers, follow=follow, hear=hear, seek=seek, line=line, voice=voice, synth=synth,
                    channels=channels, instruments=instruments, drums=drums, grand=grand, rowsPerBeat=rows_per_beat,
-                   play_along=play_along, on_note=on_note, on_bar=on_bar, on_tap=on_tap, on_done=on_done,
+                   patches=patches, repeat=repeat, play_along=play_along, on_note=on_note, on_bar=on_bar, on_tap=on_tap, on_done=on_done,
                    on_right=on_right, on_wrong=on_wrong)
     return Page(music, step, options)
 
